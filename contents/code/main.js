@@ -208,6 +208,97 @@ function moveWithFixedSize(workspace, moveDirection, movePx) {
 //     return false;
 // }
 
+// TGPSKI EDITS
+
+// function moveToColumn(workspace, colWidths, colPositions, vertMargin, colIndex) {
+//     var client = workspace.activeWindow;
+//     if (client.moveable && client.resizeable) {
+//         client.setMaximize(false, false);
+        
+//         var maxArea = workspace.clientArea(KWin.MaximizeArea, client);
+//         var clientHeight = maxArea.height - 2 * vertMargin; // vertical margins at top and bottom
+
+//         if (colIndex < 0 || colIndex >= colWidths.length) {
+//             throw new Error("Invalid column index.");
+//         }
+
+//         var newX = maxArea.x + colPositions[colIndex];
+//         var newY = maxArea.y + vertMargin;
+//         var clientWidth = colWidths[colIndex];
+
+//         reposition(client, newX, newY, clientWidth, clientHeight);
+//     }
+// }
+
+
+// function moveToThreeColumnLayoutWithPercentages(workspace, horizMargin = 25, vertMargin = 25, colPercentages) {
+//     var maxArea = workspace.clientArea(KWin.MaximizeArea);
+//     var totalWidth = maxArea.width - 4 * horizMargin; // 4 margins between and at the edges
+    
+//     var colWidths = convertPercentagesToPixels(totalWidth, colPercentages);
+//     validateColumnWidths(colWidths, horizMargin, maxArea.width);
+    
+//     var colPositions = calculateColumnPositions(colWidths, horizMargin);
+    
+//     return function(colIndex) {
+//         moveToColumn(workspace, colWidths, colPositions, vertMargin, colIndex);
+//     };
+// }
+
+// registerShortcut("MoveWindowToLeftColumnWithPercent", "UltrawideWindows: Move Window to Left Column with Percentages", "Meta+Ctrl+Shift+Num+1", function () {
+//     const layoutConfig = {
+//         horizMargin: 25,
+//         vertMargin: 25,
+//         colPercentages: [29, 57, 10], // Example: 30% for the left, 40% for the center, 30% for the right
+//     };
+//     console.log(layoutConfig);
+//     var moveToColumnFn = moveToThreeColumnLayoutWithPercentages(
+//         workspace, 
+//         layoutConfig.horizMargin, 
+//         layoutConfig.vertMargin, 
+//         layoutConfig.colPercentages
+//     );
+//     console.log(moveToColumnFn)
+//     console.log("Moving to left column");
+//     moveToColumnFn(0);
+// });
+
+// registerShortcut("MoveWindowToCenterColumnWithPercent", "UltrawideWindows: Move Window to Center Column with Percentages", "Meta+Ctrl+Shift+Num+2", function () {
+//     const layoutConfig = {
+//         horizMargin: 25,
+//         vertMargin: 25,
+//         colPercentages: [29, 57, 10], // Example: 30% for the left, 40% for the center, 30% for the right
+//     };
+//     var moveToColumnFn = moveToThreeColumnLayoutWithPercentages(
+//         workspace, 
+//         layoutConfig.horizMargin, 
+//         layoutConfig.vertMargin, 
+//         layoutConfig.colPercentages
+//     );
+//     console.log("Moving to center column");
+//     console.log(moveToColumnFn);
+//     moveToColumnFn(1);
+// });
+
+// registerShortcut("MoveWindowToRightColumnWithPercent", "UltrawideWindows: Move Window to Right Column with Percentages", "Meta+Ctrl+Shift+Num+3", function () {
+//     const layoutConfig = {
+//         horizMargin: 25,
+//         vertMargin: 25,
+//         colPercentages: [29, 57, 10], // Example: 30% for the left, 40% for the center, 30% for the right
+//     };
+//     var moveToColumnFn = moveToThreeColumnLayoutWithPercentages(
+//         workspace, 
+//         layoutConfig.horizMargin, 
+//         layoutConfig.vertMargin, 
+//         layoutConfig.colPercentages
+//     );
+//     console.log("Moving to right column");
+//     console.log(moveToColumnFn);
+//     moveToColumnFn(2);
+// });
+
+// END TGPSKI EDITS
+
 // GRID 3x2
 registerShortcut("MoveWindowToUpLeft3x2", "UltrawideWindows: Move Window to up-left (3x2)", "Meta+Num+7", function () {
     move(workspace, 3, 2, 0, 0, 1, 1)
