@@ -210,92 +210,119 @@ function moveWithFixedSize(workspace, moveDirection, movePx) {
 
 // TGPSKI EDITS
 
-// function moveToColumn(workspace, colWidths, colPositions, vertMargin, colIndex) {
-//     var client = workspace.activeWindow;
-//     if (client.moveable && client.resizeable) {
-//         client.setMaximize(false, false);
-        
-//         var maxArea = workspace.clientArea(KWin.MaximizeArea, client);
-//         var clientHeight = maxArea.height - 2 * vertMargin; // vertical margins at top and bottom
 
-//         if (colIndex < 0 || colIndex >= colWidths.length) {
-//             throw new Error("Invalid column index.");
-//         }
+function moveToColumn(workspace, colWidths, colPositions, vertMargin, colIndex) {
+    var client = workspace.activeWindow;
+    if (client.moveable && client.resizeable) {
+        client.setMaximize(false, false);
 
-//         var newX = maxArea.x + colPositions[colIndex];
-//         var newY = maxArea.y + vertMargin;
-//         var clientWidth = colWidths[colIndex];
+        var maxArea = workspace.clientArea(KWin.MaximizeArea, workspace.activeScreen, workspace.currentDesktop);
+        var clientHeight = maxArea.height - 2 * vertMargin; // vertical margins at top and bottom
 
-//         reposition(client, newX, newY, clientWidth, clientHeight);
-//     }
-// }
+        if (colIndex < 0 || colIndex >= colWidths.length) {
+            throw new Error("Invalid column index.");
+        }
 
+        var newX = maxArea.x + colPositions[colIndex];
+        var newY = maxArea.y + vertMargin;
+        var clientWidth = colWidths[colIndex];
 
-// function moveToThreeColumnLayoutWithPercentages(workspace, horizMargin = 25, vertMargin = 25, colPercentages) {
-//     var maxArea = workspace.clientArea(KWin.MaximizeArea);
-//     var totalWidth = maxArea.width - 4 * horizMargin; // 4 margins between and at the edges
-    
-//     var colWidths = convertPercentagesToPixels(totalWidth, colPercentages);
-//     validateColumnWidths(colWidths, horizMargin, maxArea.width);
-    
-//     var colPositions = calculateColumnPositions(colWidths, horizMargin);
-    
-//     return function(colIndex) {
-//         moveToColumn(workspace, colWidths, colPositions, vertMargin, colIndex);
-//     };
-// }
+        reposition(client, newX, newY, clientWidth, clientHeight);
+    }
+}
 
-// registerShortcut("MoveWindowToLeftColumnWithPercent", "UltrawideWindows: Move Window to Left Column with Percentages", "Meta+Ctrl+Shift+Num+1", function () {
-//     const layoutConfig = {
-//         horizMargin: 25,
-//         vertMargin: 25,
-//         colPercentages: [29, 57, 10], // Example: 30% for the left, 40% for the center, 30% for the right
-//     };
-//     console.log(layoutConfig);
-//     var moveToColumnFn = moveToThreeColumnLayoutWithPercentages(
-//         workspace, 
-//         layoutConfig.horizMargin, 
-//         layoutConfig.vertMargin, 
-//         layoutConfig.colPercentages
-//     );
-//     console.log(moveToColumnFn)
-//     console.log("Moving to left column");
-//     moveToColumnFn(0);
-// });
+function convertPercentagesToPixels(totalWidth, colPercentages) {
+    return colPercentages.map(function(percent) {
+        return Math.round(totalWidth * (percent / 100));
+    });
+}
 
-// registerShortcut("MoveWindowToCenterColumnWithPercent", "UltrawideWindows: Move Window to Center Column with Percentages", "Meta+Ctrl+Shift+Num+2", function () {
-//     const layoutConfig = {
-//         horizMargin: 25,
-//         vertMargin: 25,
-//         colPercentages: [29, 57, 10], // Example: 30% for the left, 40% for the center, 30% for the right
-//     };
-//     var moveToColumnFn = moveToThreeColumnLayoutWithPercentages(
-//         workspace, 
-//         layoutConfig.horizMargin, 
-//         layoutConfig.vertMargin, 
-//         layoutConfig.colPercentages
-//     );
-//     console.log("Moving to center column");
-//     console.log(moveToColumnFn);
-//     moveToColumnFn(1);
-// });
+function validateColumnWidths(colWidths, horizMargin, maxWidth) {
+    var totalWidth = colWidths.reduce(function(sum, width) {
+        return sum + width;
+    }, 0) + (colWidths.length + 1) * horizMargin;
 
-// registerShortcut("MoveWindowToRightColumnWithPercent", "UltrawideWindows: Move Window to Right Column with Percentages", "Meta+Ctrl+Shift+Num+3", function () {
-//     const layoutConfig = {
-//         horizMargin: 25,
-//         vertMargin: 25,
-//         colPercentages: [29, 57, 10], // Example: 30% for the left, 40% for the center, 30% for the right
-//     };
-//     var moveToColumnFn = moveToThreeColumnLayoutWithPercentages(
-//         workspace, 
-//         layoutConfig.horizMargin, 
-//         layoutConfig.vertMargin, 
-//         layoutConfig.colPercentages
-//     );
-//     console.log("Moving to right column");
-//     console.log(moveToColumnFn);
-//     moveToColumnFn(2);
-// });
+    if (totalWidth > maxWidth) {
+        throw new Error("Column widths plus margins exceed the available screen width.");
+    }
+
+    if (totalWidth < maxWidth) {
+        var remainingWidth = maxWidth - totalWidth;
+
+        // Increase the widths of the first two columns proportionally
+        colWidths[0] += Math.round(remainingWidth / 2);
+        colWidths[1] += Math.round(remainingWidth / 2);
+
+        totalWidth = colWidths.reduce(function(sum, width) {
+            return sum + width;
+        }, 0) + (colWidths.length + 1) * horizMargin;
+
+    }
+
+    return colWidths
+}
+
+function calculateColumnPositions(colWidths, horizMargin) {
+    var positions = [];
+    var currentPosition = horizMargin;
+
+    colWidths.forEach(function(width) {
+        positions.push(currentPosition);
+        currentPosition += width + horizMargin;
+    });
+
+    return positions;
+}
+
+function moveToThreeColumnLayoutWithPercentages(workspace, horizMargin = 25, vertMargin = 25, colPercentages) {
+    var maxArea = workspace.clientArea(KWin.MaximizeArea, workspace.activeScreen, workspace.currentDesktop);
+    var totalWidth = maxArea.width - 4 * horizMargin; // 4 margins between and at the edges
+
+    var colWidths = convertPercentagesToPixels(totalWidth, colPercentages);
+    var adjustedColWidths = validateColumnWidths(colWidths, horizMargin, maxArea.width);
+
+    var colPositions = calculateColumnPositions(adjustedColWidths, horizMargin);
+
+    return function(colIndex) {
+        moveToColumn(workspace, colWidths, colPositions, vertMargin, colIndex);
+    };
+}
+
+var layoutConfig = {
+    horizMargin: 30,
+    vertMargin: 50,
+    colPercentages: [29, 57, 11],
+};
+
+registerShortcut("MoveWindowToLeftColumnWithPercent", "UltrawideWindows: Move Window to Left Column with Percentages", "Meta+Ctrl+Shift+1", function () {
+    var moveToColumnFn = moveToThreeColumnLayoutWithPercentages(
+        workspace,
+        layoutConfig.horizMargin,
+        layoutConfig.vertMargin,
+        layoutConfig.colPercentages
+    );
+    moveToColumnFn(0);
+});
+
+registerShortcut("MoveWindowToCenterColumnWithPercent", "UltrawideWindows: Move Window to Center Column with Percentages", "Meta+Ctrl+Shift+2", function () {
+    var moveToColumnFn = moveToThreeColumnLayoutWithPercentages(
+        workspace,
+        layoutConfig.horizMargin,
+        layoutConfig.vertMargin,
+        layoutConfig.colPercentages
+    );
+    moveToColumnFn(1);
+});
+
+registerShortcut("MoveWindowToRightColumnWithPercent", "UltrawideWindows: Move Window to Right Column with Percentages", "Meta+Ctrl+Shift+3", function () {
+    var moveToColumnFn = moveToThreeColumnLayoutWithPercentages(
+        workspace,
+        layoutConfig.horizMargin,
+        layoutConfig.vertMargin,
+        layoutConfig.colPercentages
+    );
+    moveToColumnFn(2);
+});
 
 // END TGPSKI EDITS
 
