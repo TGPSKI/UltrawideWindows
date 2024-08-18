@@ -274,6 +274,28 @@ function calculateColumnPositions(colWidths, horizMargin) {
     return positions;
 }
 
+function applyColumnTakeover(workspace, horizMargin, vertMargin, colPercentages) {
+    var maxArea = workspace.clientArea(KWin.MaximizeArea, workspace.activeScreen, workspace.currentDesktop);
+    var colWidths = convertPercentagesToPixels(maxArea.width - 4 * horizMargin, colPercentages);
+    var adjustedColWidths = validateColumnWidths(colWidths, horizMargin, maxArea.width);
+    var colPositions = calculateColumnPositions(adjustedColWidths, horizMargin);
+
+    var client = workspace.activeWindow;
+    if (!client.moveable || !client.resizeable) return;
+
+    var currentX = client.frameGeometry.x;
+    var takeoverWidth;
+    var newX;
+
+    if (currentX < colPositions[2]) {
+        // Takeover
+        newX = colPositions[0];
+        takeoverWidth = colWidths[0] + colWidths[1] + horizMargin; // Left + center
+    }
+
+    reposition(client, newX, maxArea.y + vertMargin, takeoverWidth, maxArea.height - 2 * vertMargin);
+}
+
 function moveToThreeColumnLayoutWithPercentages(workspace, horizMargin = 25, vertMargin = 25, colPercentages) {
     var maxArea = workspace.clientArea(KWin.MaximizeArea, workspace.activeScreen, workspace.currentDesktop);
     var totalWidth = maxArea.width - 4 * horizMargin; // 4 margins between and at the edges
@@ -294,7 +316,7 @@ var layoutConfig = {
     colPercentages: [29, 57, 11],
 };
 
-registerShortcut("MoveWindowToLeftColumnWithPercent", "UltrawideWindows: Move Window to Left Column with Percentages", "Meta+Ctrl+Shift+1", function () {
+registerShortcut("MoveWindowToLeftColumnWithPercent", "UltrawideWindows: Move Window to Left Column with Percentages", "Meta+Ctrl+Alt+D", function () {
     var moveToColumnFn = moveToThreeColumnLayoutWithPercentages(
         workspace,
         layoutConfig.horizMargin,
@@ -304,7 +326,7 @@ registerShortcut("MoveWindowToLeftColumnWithPercent", "UltrawideWindows: Move Wi
     moveToColumnFn(0);
 });
 
-registerShortcut("MoveWindowToCenterColumnWithPercent", "UltrawideWindows: Move Window to Center Column with Percentages", "Meta+Ctrl+Shift+2", function () {
+registerShortcut("MoveWindowToCenterColumnWithPercent", "UltrawideWindows: Move Window to Center Column with Percentages", "Meta+Ctrl+Alt+B", function () {
     var moveToColumnFn = moveToThreeColumnLayoutWithPercentages(
         workspace,
         layoutConfig.horizMargin,
@@ -314,7 +336,7 @@ registerShortcut("MoveWindowToCenterColumnWithPercent", "UltrawideWindows: Move 
     moveToColumnFn(1);
 });
 
-registerShortcut("MoveWindowToRightColumnWithPercent", "UltrawideWindows: Move Window to Right Column with Percentages", "Meta+Ctrl+Shift+3", function () {
+registerShortcut("MoveWindowToRightColumnWithPercent", "UltrawideWindows: Move Window to Right Column with Percentages", "Meta+Ctrl+Alt+H", function () {
     var moveToColumnFn = moveToThreeColumnLayoutWithPercentages(
         workspace,
         layoutConfig.horizMargin,
@@ -322,6 +344,15 @@ registerShortcut("MoveWindowToRightColumnWithPercent", "UltrawideWindows: Move W
         layoutConfig.colPercentages
     );
     moveToColumnFn(2);
+});
+
+registerShortcut("ApplyWindowTakeoverWithPercent", "UltrawideWindows: Apply Window Takeover", "Meta+Ctrl+Alt+V", function () {
+    applyColumnTakeover(
+        workspace,
+        layoutConfig.horizMargin,
+        layoutConfig.vertMargin,
+        layoutConfig.colPercentages
+    );
 });
 
 // END TGPSKI EDITS
