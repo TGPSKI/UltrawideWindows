@@ -209,64 +209,134 @@ function moveWithFixedSize(workspace, moveDirection, movePx) {
 // }
 
 // TGPSKI EDITS
+const debug = true; // Set to false to turn off console.log output
+const minVertHeight = 20;
 
-
-function moveToColumn(workspace, colWidths, colPositions, vertMargin, colIndex) {
-    var client = workspace.activeWindow;
-    if (client.moveable && client.resizeable) {
-        client.setMaximize(false, false);
-
-        var maxArea = workspace.clientArea(KWin.MaximizeArea, workspace.activeScreen, workspace.currentDesktop);
-        var clientHeight = maxArea.height - 2 * vertMargin; // vertical margins at top and bottom
-
-        if (colIndex < 0 || colIndex >= colWidths.length) {
-            throw new Error("Invalid column index.");
-        }
-
-        var newX = maxArea.x + colPositions[colIndex];
-        var newY = maxArea.y + vertMargin;
-        var clientWidth = colWidths[colIndex];
-
-        reposition(client, newX, newY, clientWidth, clientHeight);
+function logDebug(...args) {
+    if (debug) {
+        console.log(...args);
     }
 }
 
-function convertPercentagesToPixels(totalWidth, colPercentages) {
-    return colPercentages.map(function(percent) {
-        return Math.round(totalWidth * (percent / 100));
+function expandObject(input) {
+    return JSON.stringify(input, null, 4)
+}
+
+function findClientVerticalPositionInContainer(clients, containerGeometry, limits, vertMargin) {
+    logDebug("findClientVerticalPositionInContainer");
+    const newClientContainerPos = {
+        x: containerGeometry.x,
+        y: containerGeometry.y,
+        width: limits.width,
+        height: limits.height,
+        minHeight: limits.minHeight
+    };
+    logDebug(expandObject(newClientContainerPos));
+    logDebug("Update clientContainerPos in loop")
+    clients.forEach(client => {
+        newClientContainerPos.y += (client.height+vertMargin);
+        newClientContainerPos.height -= (client.height+vertMargin);
+        logDebug(`client height ${client.height}`);
+        logDebug(`new container pos y ${newClientContainerPos.y}`);
     });
+
+    if (newClientContainerPos.y >= limits.height || newClientContainerPos.y < minVertHeight ) {
+        logDebug("newClientContainer outOfBounds")
+        return { x: -1, y: -1, width: -1, height: -1 };
+    }
+
+    return newClientContainerPos;
+}
+
+function moveToColumn(workspace, colWidths, colPositions, vertMargin, colIndex, utilityContainerSeparatorWidth) {
+    const activeClient = workspace.activeWindow; // More reliable than activeWindow
+    if (!activeClient || !activeClient.moveable || !activeClient.resizeable) {
+        console.warn("Active client is either not moveable or resizeable.");
+        return;
+    }
+
+    activeClient.setMaximize(false, false);
+
+    const maxArea = workspace.clientArea(KWin.MaximizeArea, workspace.activeScreen, workspace.currentDesktop);
+    const limits = {
+        width: colWidths[colIndex],
+        height: maxArea.height - (2 * vertMargin),
+        minHeight: minVertHeight
+    };
+
+    logDebug(`Moving client to column: ${colIndex}`);
+    logDebug(`Column limits - Width: ${limits.width}, Height: ${limits.height}`);
+
+    if (colIndex === 2) {
+        // Right column container logic
+        const containerGeometry = {
+            x: colPositions[colIndex],
+            y: maxArea.y + vertMargin,
+            width: limits.width,
+            height: limits.height
+        };
+
+        const allWindows = workspace.windowAt({
+            x: containerGeometry.x,
+            y: containerGeometry.y}, -1); // -1 to get all windows at this position
+        logDebug(allWindows)
+
+        const realWindows = allWindows.filter(window => !window.desktopWindow);
+        logDebug(realWindows);
+
+        if (realWindows.length && realWindows.includes(activeClient)) {
+            logDebug("Self-reference detected, skipping reposition.");
+            return;
+        }
+
+        var newClientContainerPos = findClientVerticalPositionInContainer(realWindows, containerGeometry, limits, utilityContainerSeparatorWidth, 20);
+        logDebug("New client container position:", expandObject(newClientContainerPos));
+
+        if (newClientContainerPos.y === -1) {
+            console.warn("Not enough space in the container for the new window.");
+            return;
+        }
+
+        reposition(activeClient, newClientContainerPos.x, newClientContainerPos.y, newClientContainerPos.width, newClientContainerPos.height);
+        return;
+    }
+
+    // Default behavior for left and center columns
+    const newX = maxArea.x + colPositions[colIndex];
+    const newY = maxArea.y + vertMargin;
+
+    if (colIndex < 0 || colIndex >= colWidths.length) {
+        throw new Error("Invalid column index.");
+    }
+
+    reposition(activeClient, newX, newY, limits.width, limits.height);
+}
+
+function convertPercentagesToPixels(totalWidth, colPercentages) {
+    return colPercentages.map(percent => Math.round(totalWidth * (percent / 100)));
 }
 
 function validateColumnWidths(colWidths, horizMargin, maxWidth) {
-    var totalWidth = colWidths.reduce(function(sum, width) {
-        return sum + width;
-    }, 0) + (colWidths.length + 1) * horizMargin;
+    let totalWidth = colWidths.reduce((sum, width) => sum + width, 0) + (colWidths.length + 1) * horizMargin;
 
     if (totalWidth > maxWidth) {
         throw new Error("Column widths plus margins exceed the available screen width.");
     }
 
     if (totalWidth < maxWidth) {
-        var remainingWidth = maxWidth - totalWidth;
-
-        // Increase the widths of the first two columns proportionally
+        const remainingWidth = maxWidth - totalWidth;
         colWidths[0] += Math.round(remainingWidth / 2);
         colWidths[1] += Math.round(remainingWidth / 2);
-
-        totalWidth = colWidths.reduce(function(sum, width) {
-            return sum + width;
-        }, 0) + (colWidths.length + 1) * horizMargin;
-
     }
 
-    return colWidths
+    return colWidths;
 }
 
 function calculateColumnPositions(colWidths, horizMargin) {
-    var positions = [];
-    var currentPosition = horizMargin;
+    const positions = [];
+    let currentPosition = horizMargin;
 
-    colWidths.forEach(function(width) {
+    colWidths.forEach(width => {
         positions.push(currentPosition);
         currentPosition += width + horizMargin;
     });
@@ -275,52 +345,67 @@ function calculateColumnPositions(colWidths, horizMargin) {
 }
 
 function applyColumnTakeover(workspace, horizMargin, vertMargin, colPercentages) {
-    var maxArea = workspace.clientArea(KWin.MaximizeArea, workspace.activeScreen, workspace.currentDesktop);
-    var colWidths = convertPercentagesToPixels(maxArea.width - 4 * horizMargin, colPercentages);
-    var adjustedColWidths = validateColumnWidths(colWidths, horizMargin, maxArea.width);
-    var colPositions = calculateColumnPositions(adjustedColWidths, horizMargin);
+    logDebug("applyColumnTakeover");
+    const maxArea = workspace.clientArea(KWin.MaximizeArea, workspace.activeScreen, workspace.currentDesktop);
+    const colWidths = convertPercentagesToPixels(maxArea.width - 4 * horizMargin, colPercentages);
+    const adjustedColWidths = validateColumnWidths(colWidths, horizMargin, maxArea.width);
+    const colPositions = calculateColumnPositions(adjustedColWidths, horizMargin);
 
-    var client = workspace.activeWindow;
-    if (!client.moveable || !client.resizeable) return;
-
-    var currentX = client.frameGeometry.x;
-    var takeoverWidth;
-    var newX;
-
-    if (currentX < colPositions[2]) {
-        // Takeover
-        newX = colPositions[0];
-        takeoverWidth = colWidths[0] + colWidths[1] + horizMargin; // Left + center
+    const activeClient = workspace.activeWindow;
+    if (!activeClient || !activeClient.moveable || !activeClient.resizeable) {
+        logDebug("Active client is either not moveable or resizeable.");
+        return;
     }
 
-    reposition(client, newX, maxArea.y + vertMargin, takeoverWidth, maxArea.height - 2 * vertMargin);
+    activeClient.setMaximize(false, false);
+
+
+    const currentX = activeClient.frameGeometry.x;
+    let takeoverWidth;
+    let newX;
+
+    logDebug(`x: ${currentX} colPos compare: ${colPositions[2]} `)
+
+    if (currentX < colPositions[2]) {
+        newX = colPositions[0];
+        takeoverWidth = adjustedColWidths[0] + adjustedColWidths[1] + horizMargin;
+        logDebug(takeoverWidth);
+    }
+
+    reposition(activeClient, newX, maxArea.y + vertMargin, takeoverWidth, maxArea.height - 2 * vertMargin);
 }
 
-function moveToThreeColumnLayoutWithPercentages(workspace, horizMargin = 25, vertMargin = 25, colPercentages) {
-    var maxArea = workspace.clientArea(KWin.MaximizeArea, workspace.activeScreen, workspace.currentDesktop);
-    var totalWidth = maxArea.width - 4 * horizMargin; // 4 margins between and at the edges
+function moveToThreeColumnLayoutWithPercentages(workspace, horizMargin = 25, vertMargin = 25, utilityContainerSeparatorWidth = 10, colPercentages = [29, 57, 12], ) {
+    const maxArea = workspace.clientArea(KWin.MaximizeArea, workspace.activeScreen, workspace.currentDesktop);
+    const totalWidth = maxArea.width - 4 * horizMargin;
 
-    var colWidths = convertPercentagesToPixels(totalWidth, colPercentages);
-    var adjustedColWidths = validateColumnWidths(colWidths, horizMargin, maxArea.width);
+    const colWidths = convertPercentagesToPixels(totalWidth, colPercentages);
+    const adjustedColWidths = validateColumnWidths(colWidths, horizMargin, maxArea.width);
+    const colPositions = calculateColumnPositions(adjustedColWidths, horizMargin);
 
-    var colPositions = calculateColumnPositions(adjustedColWidths, horizMargin);
-
-    return function(colIndex) {
-        moveToColumn(workspace, colWidths, colPositions, vertMargin, colIndex);
+    return function (colIndex) {
+        if (colIndex < 0 || colIndex >= colWidths.length) {
+            console.error("Invalid column index.");
+            return;
+        }
+        moveToColumn(workspace, adjustedColWidths, colPositions, vertMargin, colIndex, utilityContainerSeparatorWidth);
     };
 }
 
-var layoutConfig = {
-    horizMargin: 30,
+const layoutConfig = {
+    horizMargin: 50,
     vertMargin: 50,
-    colPercentages: [29, 57, 11],
+    colPercentages: [29, 57, 12],
+    utilityContainerSeparatorWidth: 30,
 };
+
 
 registerShortcut("MoveWindowToLeftColumnWithPercent", "UltrawideWindows: Move Window to Left Column with Percentages", "Meta+Ctrl+Alt+D", function () {
     var moveToColumnFn = moveToThreeColumnLayoutWithPercentages(
         workspace,
         layoutConfig.horizMargin,
         layoutConfig.vertMargin,
+        layoutConfig.utilityContainerSeparatorWidth,
         layoutConfig.colPercentages
     );
     moveToColumnFn(0);
@@ -331,6 +416,7 @@ registerShortcut("MoveWindowToCenterColumnWithPercent", "UltrawideWindows: Move 
         workspace,
         layoutConfig.horizMargin,
         layoutConfig.vertMargin,
+        layoutConfig.utilityContainerSeparatorWidth,
         layoutConfig.colPercentages
     );
     moveToColumnFn(1);
@@ -341,6 +427,7 @@ registerShortcut("MoveWindowToRightColumnWithPercent", "UltrawideWindows: Move W
         workspace,
         layoutConfig.horizMargin,
         layoutConfig.vertMargin,
+        layoutConfig.utilityContainerSeparatorWidth,
         layoutConfig.colPercentages
     );
     moveToColumnFn(2);
@@ -355,8 +442,8 @@ registerShortcut("ApplyWindowTakeoverWithPercent", "UltrawideWindows: Apply Wind
     );
 });
 
-// END TGPSKI EDITS
 
+// END TGPSKI EDITS
 // GRID 3x2
 registerShortcut("MoveWindowToUpLeft3x2", "UltrawideWindows: Move Window to up-left (3x2)", "Meta+Num+7", function () {
     move(workspace, 3, 2, 0, 0, 1, 1)
